@@ -1,0 +1,98 @@
+{
+  "broken_authentication": {
+    "description": "Authentication bypass attempts",
+    "patterns": [
+      {
+        "endpoint": "/login",
+        "payload": {
+          "username": "admin",
+          "password": ""
+        },
+        "volume": "high"
+      },
+      {
+        "endpoint": "/login",
+        "payload": {
+          "username": "admin",
+          "password": "admin"
+        },
+        "volume": "high"
+      },
+      {
+        "endpoint": "/api/token",
+        "payload": {
+          "grant_type": "password",
+          "username": "admin",
+          "password": "123456"
+        },
+        "volume": "high"
+      }
+    ]
+  },
+  "excessive_data_exposure": {
+    "description": "API returns sensitive data",
+    "patterns": [
+      {
+        "endpoint": "/api/users/1",
+        "expected_leak": [
+          "password",
+          "ssn",
+          "credit_card"
+        ]
+      },
+      {
+        "endpoint": "/api/admin/logs",
+        "unauthorized": true
+      }
+    ]
+  },
+  "broken_object_level_auth": {
+    "description": "Access other users data",
+    "patterns": [
+      {
+        "endpoint": "/api/users/2/transactions",
+        "user_id": 1,
+        "attack": "IDOR"
+      },
+      {
+        "endpoint": "/api/orders/5432",
+        "user_id": 1,
+        "attack": "horizontal_privilege"
+      }
+    ]
+  },
+  "rate_limiting": {
+    "description": "No rate limiting detection",
+    "patterns": [
+      {
+        "endpoint": "/api/search",
+        "requests_per_second": 500,
+        "duration": 60
+      },
+      {
+        "endpoint": "/api/payment",
+        "requests_per_second": 100,
+        "duration": 30
+      }
+    ]
+  },
+  "mass_assignment": {
+    "description": "Modify unexpected object properties",
+    "patterns": [
+      {
+        "endpoint": "/api/users/profile",
+        "payload": {
+          "name": "John",
+          "is_admin": true
+        }
+      },
+      {
+        "endpoint": "/api/account/update",
+        "payload": {
+          "email": "new@email.com",
+          "role": "admin"
+        }
+      }
+    ]
+  }
+}

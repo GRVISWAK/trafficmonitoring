@@ -1,0 +1,463 @@
+================================================================================
+🔧 ENDPOINT TESTING GUIDE - ENHANCED ML DASHBOARD
+================================================================================
+
+## 📡 BACKEND RUNNING ON: http://localhost:8000
+## 🌐 FRONTEND RUNNING ON: http://localhost:3000
+
+================================================================================
+🎯 LIVE MODE ENDPOINTS (Real Request Detection)
+================================================================================
+
+### 1. POST /login - Authentication Endpoint
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/login" `
+  -Body (@{username="testuser"; password="testpass"} | ConvertTo-Json) `
+  -ContentType "application/json"
+```
+
+**Test with curl:**
+```bash
+curl -X POST http://localhost:8000/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "testuser", "password": "testpass"}'
+```
+
+---
+
+### 2. POST /payment - Payment Processing
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/payment" `
+  -Body (@{user_id="user123"; amount=100.50; currency="USD"} | ConvertTo-Json) `
+  -ContentType "application/json"
+```
+
+**Test with curl:**
+```bash
+curl -X POST http://localhost:8000/payment \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user123", "amount": 100.50, "currency": "USD"}'
+```
+
+---
+
+### 3. GET /search - Search Query
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/search?query=products&limit=10"
+```
+
+**Test with curl:**
+```bash
+curl "http://localhost:8000/search?query=products&limit=10"
+```
+
+---
+
+### 4. GET /profile/{user_id} - User Profile
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/profile/user123"
+```
+
+**Test with curl:**
+```bash
+curl "http://localhost:8000/profile/user123"
+```
+
+---
+
+### 5. GET /live/stats - LIVE Mode Statistics
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/live/stats"
+```
+
+**Output:**
+```json
+{
+  "mode": "LIVE",
+  "total_requests": 10,
+  "current_window_count": 5,
+  "windows_processed": 1,
+  "window_size": 10,
+  "is_window_full": false,
+  "last_inference": 1703779200.123
+}
+```
+
+================================================================================
+🎬 SIMULATION MODE ENDPOINTS
+================================================================================
+
+### 1. POST /simulation/start - Start Traffic Simulation
+**Test with PowerShell:**
+```powershell
+# Normal traffic
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/start" `
+  -Body (@{mode="normal"; duration_seconds=30; requests_per_window=10} | ConvertTo-Json) `
+  -ContentType "application/json"
+
+# Rate spike (DDoS) attack
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/start" `
+  -Body (@{mode="rate_spike"; duration_seconds=30; requests_per_window=10} | ConvertTo-Json) `
+  -ContentType "application/json"
+
+# Error burst (scanning/injection)
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/start" `
+  -Body (@{mode="error_burst"; duration_seconds=30; requests_per_window=10} | ConvertTo-Json) `
+  -ContentType "application/json"
+
+# Bot attack
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/start" `
+  -Body (@{mode="bot_attack"; duration_seconds=30; requests_per_window=10} | ConvertTo-Json) `
+  -ContentType "application/json"
+
+# Large payload (exfiltration)
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/start" `
+  -Body (@{mode="large_payload"; duration_seconds=30; requests_per_window=10} | ConvertTo-Json) `
+  -ContentType "application/json"
+
+# Endpoint scan (reconnaissance)
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/start" `
+  -Body (@{mode="endpoint_scan"; duration_seconds=30; requests_per_window=10} | ConvertTo-Json) `
+  -ContentType "application/json"
+
+# Mixed anomalies
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/start" `
+  -Body (@{mode="mixed"; duration_seconds=30; requests_per_window=10} | ConvertTo-Json) `
+  -ContentType "application/json"
+```
+
+**Modes Available:**
+- `normal` - Normal traffic (baseline)
+- `rate_spike` - DDoS attack (>15 req/s)
+- `error_burst` - Scanning/injection (>50% errors)
+- `bot_attack` - Automated bot (low entropy UA)
+- `large_payload` - Data exfiltration (>5000 bytes)
+- `endpoint_scan` - Reconnaissance (>20 endpoints)
+- `mixed` - Combination of all attacks
+
+---
+
+### 2. POST /simulation/stop - Stop Simulation
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/stop"
+```
+
+**Output:**
+```json
+{
+  "status": "stopped",
+  "stats": {
+    "total_requests": 100,
+    "windows_processed": 10,
+    "anomalies_detected": 5,
+    "start_time": 1703779200.123
+  }
+}
+```
+
+---
+
+### 3. GET /simulation/stats - Get Simulation Stats
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/simulation/stats"
+```
+
+**Output:**
+```json
+{
+  "mode": "SIMULATION",
+  "active": true,
+  "total_requests": 50,
+  "windows_processed": 5,
+  "anomalies_detected": 2,
+  "current_window_count": 5,
+  "window_size": 10,
+  "is_window_full": false,
+  "simulation_mode": "rate_spike",
+  "start_time": 1703779200.123
+}
+```
+
+================================================================================
+📊 ANALYTICS & MONITORING ENDPOINTS
+================================================================================
+
+### 1. GET /api/dashboard - Dashboard Statistics
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/api/dashboard"
+```
+
+**Output:**
+```json
+{
+  "total_requests": 250,
+  "total_anomalies": 15,
+  "avg_response_time": 125.5,
+  "error_rate": 5.2,
+  "live_stats": {
+    "mode": "LIVE",
+    "total_requests": 100,
+    "windows_processed": 10
+  },
+  "simulation_stats": {
+    "active": false,
+    "total_requests": 0,
+    "windows_processed": 0
+  }
+}
+```
+
+---
+
+### 2. GET /api/logs - API Request Logs
+**Test with PowerShell:**
+```powershell
+# Get last 100 logs
+Invoke-RestMethod -Uri "http://localhost:8000/api/logs?limit=100"
+
+# Get last 20 logs
+Invoke-RestMethod -Uri "http://localhost:8000/api/logs?limit=20"
+```
+
+---
+
+### 3. GET /api/anomalies - Detected Anomalies
+**Test with PowerShell:**
+```powershell
+# Get last 50 anomalies
+Invoke-RestMethod -Uri "http://localhost:8000/api/anomalies?limit=50"
+```
+
+================================================================================
+🔍 SYSTEM ENDPOINTS
+================================================================================
+
+### 1. GET / - Health Check
+**Test with PowerShell:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8000/"
+```
+
+**Output:**
+```json
+{
+  "service": "Predictive API Misuse and Failure Prediction System",
+  "version": "2.0.0",
+  "status": "operational",
+  "modes": {
+    "live": "Real endpoint detection with sliding windows",
+    "simulation": "Synthetic traffic with anomaly injection"
+  },
+  "ml_models": {
+    "isolation_forest": "Trained on normal traffic",
+    "kmeans": "3 behavioral clusters",
+    "logistic_regression": "100% accuracy",
+    "failure_predictor": "Proactive detection"
+  },
+  "features": [
+    "request_rate",
+    "unique_endpoint_count",
+    "method_ratio",
+    "avg_payload_size",
+    "error_rate",
+    "repeated_parameter_ratio",
+    "user_agent_entropy",
+    "avg_response_time",
+    "max_response_time"
+  ]
+}
+```
+
+---
+
+### 2. GET /docs - Interactive API Documentation (Swagger UI)
+**Open in browser:**
+```
+http://localhost:8000/docs
+```
+
+================================================================================
+🧪 COMPLETE LIVE MODE TEST SEQUENCE
+================================================================================
+
+**Fill a complete window (10 requests) to trigger ML detection:**
+
+```powershell
+# Send 10 login requests
+1..10 | ForEach-Object {
+  Write-Host "Sending request $_/10..."
+  Invoke-RestMethod -Method POST `
+    -Uri "http://localhost:8000/login" `
+    -Body (@{username="user$_"; password="pass$_"} | ConvertTo-Json) `
+    -ContentType "application/json"
+  Start-Sleep -Milliseconds 100
+}
+
+Write-Host "`n✅ Window full! Check backend console for ML detection results"
+
+# Check LIVE stats
+Write-Host "`n📊 LIVE Mode Statistics:"
+Invoke-RestMethod -Uri "http://localhost:8000/live/stats"
+```
+
+**Expected Output in Backend Console:**
+```
+🔍 LIVE MODE DETECTION (Window #1):
+   Risk Score: 0.1707
+   Priority: LOW
+   Is Anomaly: True
+   Detection Method: ISOLATION_FOREST
+   Latency: 98.74ms
+```
+
+================================================================================
+🧪 COMPLETE SIMULATION TEST SEQUENCE
+================================================================================
+
+```powershell
+# 1. Start rate spike simulation
+Write-Host "🎬 Starting Rate Spike Simulation..."
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/start" `
+  -Body (@{mode="rate_spike"; duration_seconds=30} | ConvertTo-Json) `
+  -ContentType "application/json"
+
+Start-Sleep -Seconds 5
+
+# 2. Check simulation stats
+Write-Host "`n📊 Simulation Stats:"
+Invoke-RestMethod -Uri "http://localhost:8000/simulation/stats"
+
+Start-Sleep -Seconds 10
+
+# 3. Stop simulation
+Write-Host "`n⏹️ Stopping Simulation..."
+Invoke-RestMethod -Method POST `
+  -Uri "http://localhost:8000/simulation/stop"
+```
+
+**Expected Output in Backend Console:**
+```
+🎬 SIMULATION MODE STARTED
+   Mode: RATE_SPIKE
+   Duration: 30s
+   Window Size: 10
+
+🔍 SIMULATION DETECTION (Window #1):
+   Anomaly Type: RATE_SPIKE
+   Risk Score: 0.3737
+   Priority: MEDIUM
+   Is Anomaly: True
+   Detection Method: RULE_BASED+ISOLATION_FOREST
+   Rule Alerts: RATE_SPIKE
+   Latency: 21.16ms
+
+🎬 SIMULATION STOPPED
+   Total Requests: 30
+   Windows Processed: 3
+   Anomalies Detected: 2
+```
+
+================================================================================
+🌐 FRONTEND ACCESS
+================================================================================
+
+### Dashboard URL:
+```
+http://localhost:3000
+```
+
+### Features in Dashboard:
+1. **Mode Toggle**: Switch between LIVE and SIMULATION
+2. **LIVE Mode Stats**: Shows real request counts
+3. **Simulation Controls**: 
+   - Anomaly type dropdown
+   - Start/Stop buttons
+   - Active status indicator
+4. **Stats Cards**: Requests, windows, anomalies, latency, error rate
+5. **Real-time Updates**: WebSocket connection
+6. **Anomaly Table**: Recent detections with risk scores
+
+================================================================================
+💡 QUICK TIPS
+================================================================================
+
+1. **To see LIVE mode in action:**
+   - Switch to LIVE mode in dashboard
+   - Run the 10-request PowerShell script above
+   - Watch window fill and detection trigger
+
+2. **To see SIMULATION mode:**
+   - Switch to SIMULATION mode in dashboard
+   - Select anomaly type (e.g., "Rate Spike")
+   - Click "Start Simulation"
+   - Watch automatic detection
+
+3. **To test different anomalies:**
+   - Try each simulation mode (rate_spike, error_burst, etc.)
+   - Compare risk scores and rule alerts
+   - See which models trigger for each attack type
+
+4. **To monitor system:**
+   - Check /api/dashboard for overall stats
+   - Check /live/stats for LIVE mode details
+   - Check /simulation/stats for SIMULATION details
+
+================================================================================
+📝 COMMON ISSUES & SOLUTIONS
+================================================================================
+
+**Issue: "Failed to load dashboard data"**
+- Solution: Make sure backend is running on port 8000
+- Check: http://localhost:8000/ should return health check
+
+**Issue: "No toggle for LIVE/SIMULATION"**
+- Solution: Frontend should use DashboardEnhanced component
+- Check: http://localhost:3000 should show mode toggle buttons
+
+**Issue: "WebSocket disconnected"**
+- Solution: Backend WebSocket runs on ws://localhost:8000/ws
+- Should auto-reconnect
+
+**Issue: "Window not filling"**
+- Solution: Send exactly 10 requests to same endpoint
+- Check /live/stats to see current_window_count
+
+================================================================================
+✅ VERIFICATION CHECKLIST
+================================================================================
+
+- [ ] Backend running: http://localhost:8000
+- [ ] Frontend running: http://localhost:3000
+- [ ] Health check works: http://localhost:8000/
+- [ ] API docs accessible: http://localhost:8000/docs
+- [ ] Dashboard shows mode toggle
+- [ ] Can switch between LIVE and SIMULATION
+- [ ] LIVE stats update when sending requests
+- [ ] Simulation controls work (start/stop)
+- [ ] WebSocket connected (green dot in dashboard)
+- [ ] Anomaly table shows detections
+
+================================================================================
+🚀 READY TO DEMONSTRATE!
+================================================================================
+
+Your enhanced ML dashboard is fully operational with both modes ready to test!

@@ -1,0 +1,110 @@
+======================================================================
+PREDICTIVE API MISUSE AND FAILURE PREDICTION SYSTEM
+DATASET DOCUMENTATION - FOR MENTOR/VIVA PRESENTATION
+======================================================================
+
+Generated: 2025-12-28 00:31:30
+
+======================================================================
+1. TRAINING DATASET OVERVIEW
+======================================================================
+
+Total Samples: 6107
+Number of Features: 8
+Features: req_count, error_rate, avg_response_time, max_response_time, payload_mean, unique_endpoints, repeat_rate, status_entropy
+
+Feature Descriptions:
+  - req_count: Number of API requests in time window
+  - error_rate: Percentage of failed requests (4xx/5xx)
+  - avg_response_time: Average response time in milliseconds
+  - max_response_time: Maximum response time in milliseconds
+  - payload_mean: Average payload size in bytes
+  - unique_endpoints: Number of distinct endpoints accessed
+  - repeat_rate: Rate of repeated identical requests
+  - status_entropy: Entropy of HTTP status codes (measures randomness)
+
+
+Dataset Statistics:
+         req_count  error_rate  avg_response_time  max_response_time  payload_mean  unique_endpoints  repeat_rate  status_entropy
+count  6107.000000      6107.0        6107.000000        6107.000000   6107.000000       6107.000000  6107.000000          6107.0
+mean      9.999181         0.0         179.025692         194.349271     31.938464          6.522188     0.322286             0.0
+std       0.063982         0.0          26.049613          28.819781     24.131467          2.220108     0.176862             0.0
+min       5.000000         0.0         155.500000         157.000000      0.000000          2.000000     0.100000            -0.0
+25%      10.000000         0.0         157.200000         163.000000     16.600000          5.000000     0.200000            -0.0
+50%      10.000000         0.0         158.300000         182.000000     26.200000          7.000000     0.200000             0.0
+75%      10.000000         0.0         208.800000         219.000000     35.000000          9.000000     0.400000            -0.0
+max      10.000000         0.0         222.400000         289.000000    174.900000         10.000000     0.900000            -0.0
+
+======================================================================
+2. DATA SOURCES
+======================================================================
+
+This system uses real-world security datasets:
+
+a) CSIC 2010 HTTP Dataset (attempted):
+   - Source: Spanish Research National Council
+   - Contains: 36,000 normal requests + 25,000 attack requests
+   - Attack types: SQL injection, XSS, CRLF injection, etc.
+   - Status: Connection timeout (fallback to synthetic)
+
+b) Web Attack Payload Database:
+c) API Abuse Scenarios (OWASP-Based):
+d) Synthetic Traffic Generation:
+   - Generated: 1000 samples with realistic patterns
+   - Patterns: Normal users (60%), Heavy users (25%), Bots (15%)
+   - Purpose: Ensure sufficient training data
+
+======================================================================
+3. MACHINE LEARNING MODELS
+======================================================================
+
+Three models trained on this dataset:
+
+a) Isolation Forest (Anomaly Detection):
+   - Algorithm: Tree-based ensemble
+   - Parameters: 300 estimators, 5% contamination
+   - Purpose: Detect unusual API behavior patterns
+   - Output: Anomaly score (-1 to 1)
+
+b) K-Means Clustering (Usage Patterns):
+   - Algorithm: Unsupervised clustering
+   - Clusters: 3 (Normal, Heavy, Bot)
+   - Purpose: Identify bot-like behavior
+   - Output: Cluster assignment + distance
+
+c) Random Forest (Failure Prediction):
+   - Algorithm: Decision tree ensemble
+   - Parameters: 300 estimators, max depth 15
+   - Purpose: Predict API failure probability
+   - Output: Failure probability (0 to 1)
+
+======================================================================
+4. REAL-TIME DETECTION PIPELINE
+======================================================================
+
+1. Request Logging: All API requests logged automatically
+2. Feature Extraction: Aggregate into 1-minute windows
+3. ML Inference: Three models run in parallel
+4. Risk Scoring: Weighted ensemble (45% anomaly + 35% failure + 20% bot)
+5. Alert Generation: High-risk (≥0.8) triggers WebSocket alerts
+6. Dashboard Update: Real-time visualization
+
+======================================================================
+5. FILES FOR REVIEW
+======================================================================
+
+All dataset files located in: backend/datasets/
+
+For Mentor Demonstration:
+  - TRAINING_DATASET.xlsx: Main training data with statistics
+  - ATTACK_PAYLOADS.xlsx: Database of attack patterns
+  - API_ABUSE_SCENARIOS.xlsx: OWASP-based abuse scenarios
+  - COMPLETE_DATASET_REPORT.txt: This comprehensive report
+
+To View Interactively:
+  - Run: view_datasets.bat
+  - Interactive menu to explore all datasets
+
+======================================================================
+END OF REPORT
+======================================================================

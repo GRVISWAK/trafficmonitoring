@@ -1,0 +1,99 @@
+================================================================================
+HOW TO USE YOUR CSIC 2010 DATASET (Combined or Separate Files)
+================================================================================
+
+STEP-BY-STEP GUIDE:
+
+STEP 1: Extract Your CSIC Dataset
+----------------------------------
+Extract your CSIC 2010 ZIP file to get the .txt files inside.
+
+You should have one of these:
+  ✓ normalTrafficTraining.txt (normal traffic)
+  ✓ anomalousTrafficTest.txt (attack traffic)
+  ✓ Or a single combined file with both
+
+STEP 2: Copy Files to Project
+------------------------------
+Copy the .txt file(s) to this location:
+  📁 backend/datasets/
+
+Example:
+  c:\Users\HP\Desktop\8th sem project\backend\datasets\normalTrafficTraining.txt
+  c:\Users\HP\Desktop\8th sem project\backend\datasets\anomalousTrafficTest.txt
+
+💡 Don't rename them - the script will auto-detect!
+
+STEP 3: Process the Dataset
+----------------------------
+Run this command:
+  cd backend
+  process_csic.bat
+
+The script will:
+  ✓ Find your CSIC files automatically
+  ✓ Parse HTTP requests (even if combined)
+  ✓ Detect attack patterns automatically
+  ✓ Extract 8 ML features
+  ✓ Create csic_features.csv
+  ✓ Update combined_training_data.csv
+
+STEP 4: Train Models on CSIC Data
+----------------------------------
+Run:
+  train.bat
+
+Models will be trained on your REAL CSIC 2010 dataset!
+
+STEP 5: Export for Mentors
+---------------------------
+Run:
+  export_datasets.bat
+
+This creates Excel files with your CSIC data for demonstration.
+
+================================================================================
+FILE STRUCTURE AFTER PROCESSING:
+================================================================================
+
+backend/datasets/
+├── normalTrafficTraining.txt        ← Your extracted file
+├── anomalousTrafficTest.txt         ← Your extracted file
+├── processed/
+│   ├── csic_features.csv            ← Processed CSIC data (8 features)
+│   └── combined_training_data.csv   ← Combined with other datasets
+└── EXPORT_FOR_MENTORS/
+    ├── TRAINING_DATASET.xlsx        ← For mentors (with CSIC data!)
+    └── COMPLETE_DATASET_REPORT.txt  ← Updated report
+
+================================================================================
+TROUBLESHOOTING:
+================================================================================
+
+Q: "No CSIC files found"
+A: Make sure you copied the .txt files to backend/datasets/ folder
+   (NOT backend/datasets/raw/ or backend/datasets/processed/)
+
+Q: "Normal and anomalous traffic are combined"
+A: No problem! The script detects attacks automatically using patterns like:
+   - SQL injection keywords (SELECT, UNION, DROP, etc.)
+   - XSS patterns (<script, javascript:, etc.)
+   - Path traversal (../, etc/passwd, etc.)
+   - Command injection (exec, eval, system, etc.)
+
+Q: "How do I verify it worked?"
+A: After running process_csic.bat, check:
+   - backend/datasets/processed/csic_features.csv should exist
+   - You'll see output like "Successfully parsed X requests"
+   - You'll see "Normal requests: X, Attack requests: Y"
+
+================================================================================
+QUICK COMMANDS:
+================================================================================
+
+1. cd backend
+2. process_csic.bat    (process your CSIC files)
+3. train.bat           (train models)
+4. export_datasets.bat (create mentor files)
+
+Done! Your models are now trained on REAL CSIC 2010 dataset! 🎉

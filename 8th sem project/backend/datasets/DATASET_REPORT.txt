@@ -1,0 +1,138 @@
+======================================================================
+PREDICTIVE API MISUSE DETECTION SYSTEM
+DATASET REPORT FOR REVIEW
+======================================================================
+
+Report Generated: 2025-12-27 21:00:07
+
+======================================================================
+DATASET OVERVIEW
+======================================================================
+
+Total Training Samples: 1000
+Number of Features: 8
+Feature Types: Numerical (continuous)
+
+Dataset Sources:
+1. CSIC 2010 HTTP Dataset (Real web application attacks)
+2. Synthetic API Traffic (Algorithmically generated patterns)
+
+======================================================================
+FEATURE DESCRIPTIONS
+======================================================================
+
+req_count:
+  Description: Total number of API requests in time window
+  Min: 5.00
+  Max: 1495.00
+  Mean: 206.80
+  Std Dev: 342.95
+
+error_rate:
+  Description: Percentage of 4xx/5xx error responses
+  Min: 0.00
+  Max: 0.95
+  Mean: 0.17
+  Std Dev: 0.23
+
+avg_response_time:
+  Description: Average API response time in milliseconds
+  Min: 50.35
+  Max: 1496.95
+  Mean: 272.83
+  Std Dev: 292.29
+
+max_response_time:
+  Description: Maximum API response time in milliseconds
+  Min: 150.23
+  Max: 2999.92
+  Mean: 597.40
+  Std Dev: 638.68
+
+payload_mean:
+  Description: Average payload size in bytes
+  Min: 100.48
+  Max: 1999.08
+  Mean: 498.44
+  Std Dev: 398.71
+
+unique_endpoints:
+  Description: Number of distinct API endpoints accessed
+  Min: 1.00
+  Max: 5.00
+  Mean: 3.12
+  Std Dev: 1.27
+
+repeat_rate:
+  Description: Percentage of requests to same endpoint
+  Min: 0.20
+  Max: 1.00
+  Mean: 0.52
+  Std Dev: 0.21
+
+status_entropy:
+  Description: Shannon entropy of HTTP status codes
+  Min: 0.10
+  Max: 1.20
+  Mean: 0.72
+  Std Dev: 0.26
+
+======================================================================
+STATISTICAL SUMMARY
+======================================================================
+
+         req_count   error_rate  avg_response_time  max_response_time  payload_mean  unique_endpoints  repeat_rate  status_entropy
+count  1000.000000  1000.000000        1000.000000        1000.000000   1000.000000       1000.000000  1000.000000     1000.000000
+mean    206.798000     0.168850         272.831394         597.401859    498.439646          3.123000     0.518674        0.720976
+std     342.953096     0.225710         292.293157         638.678142    398.705994          1.273378     0.206648        0.258995
+min       5.000000     0.000004          50.352601         150.234844    100.477133          1.000000     0.200003        0.102523
+25%      25.000000     0.040984         110.414226         258.706582    251.279784          2.000000     0.370595        0.542083
+50%      43.000000     0.077984         169.615103         349.255946    386.157877          3.000000     0.491546        0.734820
+75%     210.000000     0.171497         297.966431         605.918768    541.201279          4.000000     0.593657        0.897960
+max    1495.000000     0.949033        1496.951971        2999.916504   1999.077917          5.000000     0.999655        1.199308
+
+======================================================================
+SAMPLE DATA (First 10 rows)
+======================================================================
+
+   req_count  error_rate  avg_response_time  max_response_time  payload_mean  unique_endpoints  repeat_rate  status_entropy
+0         12    0.092102         191.712501         376.722526    215.031016                 2     0.340339        0.595635
+1         25    0.090040         175.908170         398.501582    395.856399                 5     0.555444        0.901109
+2         37    0.087778         120.822881         284.814820    112.653839                 2     0.220077        0.793312
+3         44    0.072791         163.161676         369.923979    315.508735                 5     0.365781        0.699786
+4         37    0.041545          70.181886         342.673165    457.686764                 4     0.512499        0.877333
+5          6    0.049800         118.634076         307.659267    343.152848                 2     0.553057        0.575920
+6         40    0.089313          76.154856         152.358441    354.094282                 3     0.326063        0.969984
+7         41    0.097027          72.190476         359.269495    407.740083                 3     0.547676        1.031267
+8         20    0.033511         163.316802         381.451169    267.694016                 4     0.427491        0.902725
+9         28    0.003723          69.481085         394.802059    258.664066                 3     0.481733        0.981378
+
+======================================================================
+DATA QUALITY CHECKS
+======================================================================
+
+Missing Values: 0
+Duplicate Rows: 0
+Data Types Valid: Yes
+Value Ranges Valid: Yes
+
+======================================================================
+ANOMALY INDICATORS IN DATASET
+======================================================================
+
+High Error Rate Samples (>30%): 150 (15.0%)
+High Volume Samples (>200 req): 266 (26.6%)
+
+======================================================================
+DATASET FILES LOCATION
+======================================================================
+
+Combined Training Data: C:\Users\HP\Desktop\8th sem project\backend\datasets\processed/combined_training_data.csv
+CSIC Features: C:\Users\HP\Desktop\8th sem project\backend\datasets\processed/csic_features.csv
+Synthetic Features: C:\Users\HP\Desktop\8th sem project\backend\datasets\processed/synthetic_api_traffic.csv
+Attack Payloads: C:\Users\HP\Desktop\8th sem project\backend\datasets/web_attack_payloads.json
+API Abuse Scenarios: C:\Users\HP\Desktop\8th sem project\backend\datasets/api_abuse_scenarios.json
+
+======================================================================
+END OF REPORT
+======================================================================
