@@ -8,12 +8,9 @@ import time
 from database import SessionLocal, APILog
 from window_manager import live_window_manager
 from inference_enhanced import HybridDetectionEngine
+from mode_isolation import live_manager
 from typing import Optional
 import json
-
-# Global counter for STRICT LIVE MODE tracking
-# Increments ONLY for whitelisted manual API calls
-_live_mode_request_counter = 0
 
 
 class EnhancedLoggingMiddleware(BaseHTTPMiddleware):
@@ -40,8 +37,6 @@ class EnhancedLoggingMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, detection_engine: Optional[HybridDetectionEngine] = None):
         super().__init__(app)
         self.detection_engine = detection_engine or HybridDetectionEngine()
-        global _live_mode_request_counter
-        _live_mode_request_counter = 0  # Reset on initialization
         
     async def dispatch(self, request: Request, call_next):
         # STRICT FILTERING
@@ -115,10 +110,9 @@ class EnhancedLoggingMiddleware(BaseHTTPMiddleware):
             db.add(log_entry)
             db.commit()
             
-            # Increment GLOBAL counter ONLY after successful DB commit
+            # Increment live manager counter ONLY after successful DB commit
             # This ensures exactly 1 count per manual API call
-            global _live_mode_request_counter
-            _live_mode_request_counter += 1
+            live_manager.increment_request(path, latency_ms, status_code)
         except Exception as e:
             print(f"Error logging to database: {e}")
             # If DB fails, don't increment counter
@@ -162,18 +156,19 @@ class EnhancedLoggingMiddleware(BaseHTTPMiddleware):
 
 def get_live_stats():
     """
-    Uses GLOBAL counter that increments exactly once per manual API call.
+    Uses isolated live manager for strict mode separation.
     Returns zero counts if no real traffic has occurred.
     """
     window_info = live_window_manager.get_window_info()
-    
+    live_stats = live_manager.get_stats()
+
     return {
         'mode': 'LIVE',
-        'total_requests': _live_mode_request_counter,  # Use global counter
+        'total_requests': live_stats['total_requests'],
         'current_window_count': window_info['current_count'],
         'windows_processed': window_info['windows_processed'],
         'window_size': window_info['window_size'],
         'is_window_full': window_info['is_full'],
         'last_inference': window_info['last_inference'],
-        'status': 'active' if _live_mode_request_counter > 0 else 'idle'
+        'status': 'active' if live_stats['total_requests'] > 0 else 'idle'
     }

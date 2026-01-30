@@ -43,6 +43,16 @@ export const apiService = {
     return response.data;
   },
 
+  clearSimulationData: async (): Promise<any> => {
+    const response = await api.post('/simulation/clear-data');
+    return response.data;
+  },
+
+  triggerDetection: async (): Promise<any> => {
+    const response = await api.post('/api/trigger-detection');
+    return response.data;
+  },
+
   stopSimulation: async (): Promise<any> => {
     const response = await api.post('/simulation/stop');
     return response.data;

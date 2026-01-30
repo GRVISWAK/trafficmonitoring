@@ -38,20 +38,29 @@ app.include_router(graphs_router)
 
 init_db()
 
-# STRICT SEPARATION: Simulation Mode State
-# (Live mode stats tracked in middleware.py)
-
-# Simulation mode tracks ONLY synthetic traffic
+# STRICT SEPARATION: Simulation Mode State (completely isolated from Live Mode)
 simulation_active = False
 simulation_stats = {
-    'total_requests': 0,  # Only simulation-generated requests
+    'total_requests': 0,
     'windows_processed': 0,
     'anomalies_detected': 0,
     'start_time': None,
     'simulated_endpoint': 'none'
 }
-# Track whether we already persisted an anomaly for a simulated endpoint
 simulation_anomaly_recorded = set()
+
+def reset_simulation_state():
+    """Reset all simulation state to initial values"""
+    global simulation_active, simulation_stats, simulation_anomaly_recorded
+    simulation_active = False
+    simulation_stats = {
+        'total_requests': 0,
+        'windows_processed': 0,
+        'anomalies_detected': 0,
+        'start_time': None,
+        'simulated_endpoint': 'none'
+    }
+    simulation_anomaly_recorded.clear()
 
 
 @app.on_event("startup")
@@ -235,6 +244,85 @@ async def search(query: str = "", limit: int = 10):
     }
 
 
+@app.post("/signup")
+async def signup(req: Request):
+    """
+    Mock signup endpoint.
+    Simulates user registration with variable response times.
+    """
+    try:
+        body = await req.json()
+        username = body.get("username", "")
+        email = body.get("email", "")
+    except:
+        username = ""
+        email = ""
+    
+    if not username:
+        username = f"user_{random.randint(1000, 9999)}"
+    if not email:
+        email = f"{username}@example.com"
+    
+    req.state.user_id = username
+    await asyncio.sleep(random.uniform(0.1, 0.4))
+    
+    if random.random() < 0.05:
+        raise HTTPException(status_code=409, detail="User already exists")
+    
+    return {
+        "success": True,
+        "user_id": username,
+        "email": email,
+        "message": "User registered successfully"
+    }
+
+
+@app.get("/profile")
+async def profile(user_id: str = ""):
+    """
+    Mock profile endpoint.
+    Simulates user profile retrieval.
+    """
+    if not user_id:
+        raise HTTPException(status_code=400, detail="User ID required")
+    
+    await asyncio.sleep(random.uniform(0.05, 0.2))
+    
+    if random.random() < 0.05:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "user_id": user_id,
+        "username": user_id,
+        "email": f"{user_id}@example.com",
+        "created_at": "2024-01-01T00:00:00Z",
+        "last_login": datetime.utcnow().isoformat() + "Z"
+    }
+
+
+@app.post("/logout")
+async def logout(req: Request):
+    """
+    Mock logout endpoint.
+    Simulates user logout.
+    """
+    try:
+        body = await req.json()
+        user_id = body.get("user_id", body.get("username", ""))
+    except:
+        user_id = ""
+    
+    if user_id:
+        req.state.user_id = user_id
+    
+    await asyncio.sleep(random.uniform(0.05, 0.15))
+    
+    return {
+        "success": True,
+        "message": "Logout successful"
+    }
+
+
 @app.get("/health")
 async def health():
     """
@@ -354,13 +442,18 @@ async def get_stats(db: Session = Depends(get_db)):
 @app.get("/api/analytics/endpoint/{endpoint:path}")
 async def get_endpoint_analytics(endpoint: str, db: Session = Depends(get_db)):
     """
-    LIVE MODE ONLY: Get analytics for a specific endpoint from real traffic.
+    Get accurate analytics for a specific endpoint.
+    Calculates metrics from actual database logs.
     """
     if not endpoint.startswith('/'):
         endpoint = '/' + endpoint
     
+    # Get logs from last 24 hours for accurate metrics
+    time_threshold = datetime.utcnow() - timedelta(hours=24)
+    
     logs = db.query(APILog).filter(
         APILog.endpoint == endpoint,
+        APILog.timestamp >= time_threshold,
         (APILog.is_simulation == False) | (APILog.is_simulation == None)
     ).all()
     
@@ -370,7 +463,8 @@ async def get_endpoint_analytics(endpoint: str, db: Session = Depends(get_db)):
             "total_requests": 0,
             "error_rate": 0,
             "avg_latency": 0,
-            "failure_probability": 0
+            "failure_probability": 0,
+            "status_breakdown": {}
         }
     
     total_requests = len(logs)
@@ -378,8 +472,16 @@ async def get_endpoint_analytics(endpoint: str, db: Session = Depends(get_db)):
     error_rate = error_count / total_requests
     avg_latency = sum(log.response_time_ms for log in logs) / total_requests
     
+    # Status code breakdown
+    status_breakdown = {}
+    for log in logs:
+        status = str(log.status_code)
+        status_breakdown[status] = status_breakdown.get(status, 0) + 1
+    
+    # Get anomalies for this endpoint
     anomalies = db.query(AnomalyLog).filter(
         AnomalyLog.endpoint == endpoint,
+        AnomalyLog.timestamp >= time_threshold,
         (AnomalyLog.is_simulation == False) | (AnomalyLog.is_simulation == None)
     ).all()
     
@@ -392,8 +494,11 @@ async def get_endpoint_analytics(endpoint: str, db: Session = Depends(get_db)):
         "endpoint": endpoint,
         "total_requests": total_requests,
         "error_rate": round(error_rate, 3),
+        "error_count": error_count,
         "avg_latency": round(avg_latency, 2),
-        "failure_probability": round(avg_failure_prob, 3)
+        "failure_probability": round(avg_failure_prob, 3),
+        "status_breakdown": status_breakdown,
+        "anomaly_count": len(anomalies)
     }
 
 
@@ -637,6 +742,28 @@ async def reset_injections():
     }
 
 
+@app.post("/simulation/clear-data")
+async def clear_simulation_data(db: Session = Depends(get_db)):
+    """Clear all simulation data from database"""
+    try:
+        # Delete simulation logs
+        db.query(APILog).filter(APILog.is_simulation == True).delete()
+        # Delete simulation anomalies
+        db.query(AnomalyLog).filter(AnomalyLog.is_simulation == True).delete()
+        db.commit()
+        
+        print("[SIMULATION] Cleared all simulation data from database")
+        
+        return {
+            "status": "success",
+            "message": "Simulation data cleared"
+        }
+    except Exception as e:
+        db.rollback()
+        print(f"[SIMULATION] Error clearing data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/simulation/start")
 async def start_simulation(
     background_tasks: BackgroundTasks,
@@ -645,15 +772,18 @@ async def start_simulation(
     requests_per_window: int = 10
 ):
     """
-    Start simulation with synthetic traffic
+    Start simulation with synthetic traffic.
+    Completely isolated from Live Mode.
     """
-    global simulation_active, simulation_stats
+    global simulation_active, simulation_stats, simulation_anomaly_recorded
     
     if simulation_active:
         raise HTTPException(status_code=400, detail="Simulation already running")
     
+    # Reset state before starting
+    reset_simulation_state()
+    
     simulation_active = True
-    simulation_anomaly_recorded.clear()
     simulation_stats = {
         'total_requests': 0,
         'windows_processed': 0,
@@ -662,7 +792,9 @@ async def start_simulation(
         'simulated_endpoint': simulated_endpoint
     }
     
-    # Start simulation in background
+    print(f"\n[SIMULATION] Starting for endpoint: {simulated_endpoint}")
+    print(f"[SIMULATION] Initial state: {simulation_stats}")
+    
     background_tasks.add_task(
         run_simulation,
         simulated_endpoint=simulated_endpoint,
@@ -679,18 +811,19 @@ async def start_simulation(
 
 @app.post("/simulation/stop")
 async def stop_simulation():
-    """Stop running simulation and reset tracking"""
+    """Stop running simulation and reset all state"""
     global simulation_active, simulation_stats, simulation_anomaly_recorded
     
-    simulation_anomaly_recorded.clear()
     if not simulation_active:
         raise HTTPException(status_code=400, detail="No simulation running")
     
     simulation_active = False
-    
     final_stats = simulation_stats.copy()
     
-    print(f"[SIMULATION] Stopped. Final stats: {final_stats}")
+    print(f"\n[SIMULATION] Stopped. Final stats: {final_stats}")
+    
+    # Reset state after stopping
+    reset_simulation_state()
     
     return {
         "status": "stopped",
@@ -699,9 +832,43 @@ async def stop_simulation():
 
 
 @app.get("/simulation/stats")
-async def get_simulation_stats():
-    """Get current simulation statistics with detailed tracking"""
-    global simulation_stats, simulation_active, simulation_anomaly_recorded
+async def get_simulation_stats(db: Session = Depends(get_db)):
+    """Get current simulation statistics with accurate metrics"""
+    global simulation_stats, simulation_active
+    
+    # Calculate accurate metrics from database
+    if simulation_stats['total_requests'] > 0:
+        # Get simulation logs
+        sim_logs = db.query(APILog).filter(
+            APILog.is_simulation == True,
+            APILog.timestamp >= datetime.utcnow() - timedelta(minutes=5)
+        ).all()
+        
+        if sim_logs:
+            # Calculate metrics
+            total_requests = len(sim_logs)
+            error_count = sum(1 for log in sim_logs if log.status_code >= 400)
+            error_rate = (error_count / total_requests) if total_requests > 0 else 0
+            avg_response_time = sum(log.response_time_ms for log in sim_logs) / total_requests
+            
+            # Get anomalies
+            sim_anomalies = db.query(AnomalyLog).filter(
+                AnomalyLog.is_simulation == True,
+                AnomalyLog.timestamp >= datetime.utcnow() - timedelta(minutes=5)
+            ).all()
+            
+            return {
+                'mode': 'SIMULATION',
+                'active': simulation_active,
+                'total_requests': simulation_stats['total_requests'],
+                'windows_processed': simulation_stats['windows_processed'],
+                'anomalies_detected': len(sim_anomalies),
+                'simulated_endpoint': simulation_stats.get('simulated_endpoint', 'none'),
+                'start_time': simulation_stats.get('start_time'),
+                'error_rate': round(error_rate, 3),
+                'avg_response_time': round(avg_response_time, 2),
+                'error_count': error_count
+            }
     
     return {
         'mode': 'SIMULATION',
@@ -711,48 +878,50 @@ async def get_simulation_stats():
         'anomalies_detected': simulation_stats['anomalies_detected'],
         'simulated_endpoint': simulation_stats.get('simulated_endpoint', 'none'),
         'start_time': simulation_stats.get('start_time'),
-        'anomaly_recorded_for_endpoint': list(simulation_anomaly_recorded)
+        'error_rate': 0,
+        'avg_response_time': 0,
+        'error_count': 0
     }
 
 
 async def run_simulation(simulated_endpoint: str, duration_seconds: int, requests_per_window: int = 100):
     """
-    Run simulation - generates synthetic traffic and detects anomalies
-    High-RPS bursts with proper state tracking and console logging
+    Run simulation - generates synthetic traffic with ONE specific anomaly type per endpoint.
+    Ensures accurate metrics and proper anomaly detection.
     """
-    global simulation_active, simulation_stats
+    global simulation_active, simulation_stats, simulation_anomaly_recorded
     
     print(f"\n{'='*70}")
     print(f"🎬 SIMULATION STARTED")
     print(f"{'='*70}")
     print(f"   Endpoint: {simulated_endpoint}")
+    print(f"   Anomaly Type: {ENDPOINT_ANOMALY_MAP.get(simulated_endpoint, 'NONE').value if simulated_endpoint in ENDPOINT_ANOMALY_MAP else 'NONE'}")
     print(f"   Duration: {duration_seconds}s")
-    print(f"   Target RPS: 100+")
     print(f"{'='*70}\n")
     
     start_time = time.time()
     total_requests = 0
-    batch_size = 100  # Target >=100 RPS burst size
+    batch_size = 50
     
     try:
         while simulation_active and (time.time() - start_time) < duration_seconds:
-            # Generate synthetic requests in high-RPS batches
+            # Generate batch of requests
             for i in range(batch_size):
                 if not simulation_active:
                     break
-                    
-                # Create base synthetic log
+                
+                # Base log
                 base_log = {
                     'endpoint': simulated_endpoint,
-                    'method': random.choice(["GET", "POST"]),
-                    'response_time_ms': random.uniform(100, 300),  # Normal baseline
-                    'status_code': 200,  # Start with success
-                    'payload_size': random.randint(500, 2000),  # Normal size
+                    'method': 'POST' if simulated_endpoint in ['/login', '/payment', '/signup', '/logout'] else 'GET',
+                    'response_time_ms': random.uniform(100, 300),
+                    'status_code': 200,
+                    'payload_size': random.randint(500, 2000),
                     'ip_address': f"SIM-{random.randint(1, 255)}",
                     'user_id': f"sim_user_{random.randint(1, 100)}"
                 }
                 
-                # INJECT ANOMALY: Modify log based on endpoint's assigned anomaly
+                # Inject anomaly
                 modified_log = inject_anomaly_into_log(simulated_endpoint, base_log)
                 
                 # Save to database
@@ -766,109 +935,89 @@ async def run_simulation(simulated_endpoint: str, duration_seconds: int, request
                         payload_size=modified_log['payload_size'],
                         ip_address=modified_log['ip_address'],
                         user_id=modified_log['user_id'],
-                        is_simulation=True  # CRITICAL: Mark as simulation data
+                        is_simulation=True
                     )
                     db.add(log_entry)
                     db.commit()
                     total_requests += 1
                     simulation_stats['total_requests'] = total_requests
-                    
-                    # Log with anomaly indicator
-                    if '_injected_anomaly' in modified_log:
-                        anomaly_info = modified_log['_injected_anomaly']
-                        print(f"[SIM] Request #{total_requests} - {simulated_endpoint} [{anomaly_info['type']} - {anomaly_info['severity']}]")
-                    else:
-                        print(f"[SIM] Request #{total_requests} - {simulated_endpoint} [NORMAL]")
-                    
                 finally:
                     db.close()
             
-            # Run DETERMINISTIC anomaly detection on SIMULATION data each batch
-            features = extract_features_from_logs(time_window_minutes=1, is_simulation=True)
-            if features:
-                # Use deterministic detector instead of ML model
-                detection_result = anomaly_detector.detect(features)
-                simulation_stats['windows_processed'] += 1
-                
-                if detection_result['is_anomaly']:
-                    # Enforce at most one persisted anomaly per simulated endpoint per run
-                    if simulated_endpoint in simulation_anomaly_recorded:
-                        continue
-                    simulation_anomaly_recorded.add(simulated_endpoint)
-                    simulation_stats['anomalies_detected'] += 1
+            # Run detection every batch
+            if total_requests % batch_size == 0:
+                features = extract_features_from_logs(time_window_minutes=1, is_simulation=True)
+                if features:
+                    simulation_stats['windows_processed'] += 1
+                    detection_result = anomaly_detector.detect(features)
                     
-                    assigned_anomaly = ENDPOINT_ANOMALY_MAP.get(simulated_endpoint)
-                    anomaly_type = detection_result['anomaly_type'] if detection_result['anomaly_type'] else (assigned_anomaly.value if assigned_anomaly else 'unknown')
-                    severity = detection_result['severity']
-                    resolutions = resolution_engine.generate_resolutions(anomaly_type, severity)
-                    window_duration = 60.0
-                    
-                    db = SessionLocal()
-                    try:
-                        anomaly_log = AnomalyLog(
-                            endpoint=features['endpoint'],
-                            method=features['method'],
-                            risk_score=detection_result.get('confidence', 0.8) * 100,
-                            priority=severity,
-                            failure_probability=detection_result['failure_probability'],
-                            anomaly_score=detection_result.get('confidence', 0.8),
-                            is_anomaly=True,
-                            usage_cluster=2,
-                            req_count=features['req_count'],
-                            error_rate=features['error_rate'],
-                            avg_response_time=features['avg_response_time'],
-                            max_response_time=features['max_response_time'],
-                            payload_mean=features['payload_mean'],
-                            unique_endpoints=features['unique_endpoints'],
-                            repeat_rate=features['repeat_rate'],
-                            status_entropy=features['status_entropy'],
-                            anomaly_type=anomaly_type,
-                            severity=severity,
-                            duration_seconds=window_duration,
-                            impact_score=detection_result['impact_score'],
-                            is_simulation=True
-                        )
-                        db.add(anomaly_log)
-                        db.commit()
-                        db.refresh(anomaly_log)
+                    if detection_result['is_anomaly'] and simulated_endpoint not in simulation_anomaly_recorded:
+                        simulation_anomaly_recorded.add(simulated_endpoint)
+                        simulation_stats['anomalies_detected'] += 1
                         
-                        await manager.broadcast({
-                            'type': 'anomaly',
-                            'data': {
-                                'id': anomaly_log.id,
-                                'timestamp': anomaly_log.timestamp.isoformat(),
-                                'endpoint': anomaly_log.endpoint,
-                                'anomaly_type': anomaly_type,
-                                'severity': severity,
-                                'duration_seconds': window_duration,
-                                'impact_score': detection_result['impact_score'],
-                                'failure_probability': detection_result['failure_probability'],
-                                'resolutions': resolutions[:3],
-                                'method': anomaly_log.method,
-                                'risk_score': anomaly_log.risk_score,
-                                'priority': anomaly_log.priority,
-                                'failure_probability': anomaly_log.failure_probability,
-                                'is_anomaly': anomaly_log.is_anomaly
-                            }
-                        })
+                        # Get assigned anomaly type - NEVER use 'unknown'
+                        assigned_anomaly = ENDPOINT_ANOMALY_MAP.get(simulated_endpoint)
+                        if assigned_anomaly:
+                            anomaly_type = assigned_anomaly.value
+                        elif detection_result.get('anomaly_type'):
+                            anomaly_type = detection_result['anomaly_type']
+                        else:
+                            anomaly_type = 'latency_spike'  # Default fallback
                         
-                        print(f"\n🚨 [SIMULATION] Anomaly Detected!")
-                        print(f"   Endpoint: {simulated_endpoint}")
-                        print(f"   Type: {anomaly_type}")
-                        print(f"   Severity: {severity}")
-                        print(f"   Impact: {detection_result['impact_score']:.2f}")
-                        print(f"   Recorded: {simulated_endpoint in simulation_anomaly_recorded}")
-                    finally:
-                        db.close()
+                        severity = detection_result.get('severity', 'HIGH')
+                        
+                        db = SessionLocal()
+                        try:
+                            anomaly_log = AnomalyLog(
+                                endpoint=features['endpoint'],
+                                method=features['method'],
+                                risk_score=detection_result.get('confidence', 0.8) * 100,
+                                priority=severity,
+                                failure_probability=detection_result['failure_probability'],
+                                anomaly_score=detection_result.get('confidence', 0.8),
+                                is_anomaly=True,
+                                usage_cluster=2,
+                                req_count=features['req_count'],
+                                error_rate=features['error_rate'],
+                                avg_response_time=features['avg_response_time'],
+                                max_response_time=features['max_response_time'],
+                                payload_mean=features['payload_mean'],
+                                unique_endpoints=features['unique_endpoints'],
+                                repeat_rate=features['repeat_rate'],
+                                status_entropy=features['status_entropy'],
+                                anomaly_type=anomaly_type,
+                                severity=severity,
+                                duration_seconds=60.0,
+                                impact_score=detection_result['impact_score'],
+                                is_simulation=True
+                            )
+                            db.add(anomaly_log)
+                            db.commit()
+                            db.refresh(anomaly_log)
+                            
+                            print(f"\n🚨 ANOMALY DETECTED: {anomaly_type}")
+                            print(f"   Endpoint: {simulated_endpoint}")
+                            print(f"   Severity: {severity}")
+                            
+                            await manager.broadcast({
+                                'type': 'anomaly',
+                                'data': {
+                                    'id': anomaly_log.id,
+                                    'timestamp': anomaly_log.timestamp.isoformat(),
+                                    'endpoint': anomaly_log.endpoint,
+                                    'anomaly_type': anomaly_type,
+                                    'severity': severity,
+                                    'is_simulation': True
+                                }
+                            })
+                        finally:
+                            db.close()
             
-            # Small delay between batches
-            # Keep bursts fast; small pause to avoid DB lock
             await asyncio.sleep(0.1)
             
-            # Print progress every batch
-            elapsed = time.time() - start_time
-            rps = total_requests / elapsed if elapsed > 0 else 0
-            print(f"[SIM] Progress: {total_requests} requests | {rps:.0f} RPS | {simulation_stats['anomalies_detected']} anomalies")
+            if total_requests % 50 == 0:
+                elapsed = time.time() - start_time
+                print(f"[SIM] Progress: {total_requests} requests | {simulation_stats['anomalies_detected']} anomalies")
     
     except Exception as e:
         print(f"\n❌ Simulation error: {e}")
@@ -882,8 +1031,7 @@ async def run_simulation(simulated_endpoint: str, duration_seconds: int, request
         print(f"{'='*70}")
         print(f"   Total Requests: {total_requests}")
         print(f"   Duration: {elapsed:.2f}s")
-        print(f"   Avg RPS: {total_requests/elapsed if elapsed > 0 else 0:.0f}")
-        print(f"   Anomalies Detected: {simulation_stats['anomalies_detected']}")
+        print(f"   Anomalies: {simulation_stats['anomalies_detected']}")
         print(f"{'='*70}\n")
 
 
@@ -940,12 +1088,20 @@ async def start_enhanced_simulation(
 
 @app.post("/api/simulation/stop-enhanced")
 async def stop_enhanced_simulation():
-    """Stop enhanced simulation"""
+    """Stop enhanced simulation and return final stats"""
     if not enhanced_simulation_engine.active:
         raise HTTPException(status_code=400, detail="No simulation running")
     
+    # Stop the simulation
     enhanced_simulation_engine.stop()
+    
+    # Wait a moment for the background task to finish
+    await asyncio.sleep(2)
+    
+    # Get final stats
     stats = enhanced_simulation_engine.get_stats()
+    
+    print(f"\n[ENHANCED SIMULATION] Stopped. Final stats: {stats}\n")
     
     return {
         "status": "stopped",

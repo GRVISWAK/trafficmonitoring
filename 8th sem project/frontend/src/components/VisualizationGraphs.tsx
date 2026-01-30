@@ -18,6 +18,7 @@ import { apiService } from '../services/api';
 
 interface GraphsProps {
   hours?: number;
+  limit?: number;
 }
 
 const SEVERITY_COLORS = {
@@ -52,17 +53,29 @@ export const RiskScoreTimeline: React.FC<GraphsProps> = ({ hours = 24 }) => {
         setData(formatted);
       } catch (error) {
         console.error('Error fetching risk score timeline:', error);
+        setData([]);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-    const interval = setInterval(fetchData, 30000); // Refresh every 30s
+    const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
   }, [hours]);
 
   if (loading) return <div className="animate-pulse h-64 bg-gray-200 rounded"></div>;
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Risk Score Timeline</h3>
+        <div className="flex items-center justify-center h-64 text-gray-500">
+          <p>No anomaly data available. Start a simulation to see results.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white p-6 rounded-lg shadow">
@@ -159,9 +172,10 @@ export const AnomalyTypeDistribution: React.FC<GraphsProps> = ({ hours = 24 }) =
     const fetchData = async () => {
       try {
         const response = await apiService.getAnomalyTypeDistribution(hours);
-        setData(response.distribution);
+        setData(response.distribution || []);
       } catch (error) {
         console.error('Error fetching anomaly type distribution:', error);
+        setData([]);
       } finally {
         setLoading(false);
       }
@@ -173,6 +187,17 @@ export const AnomalyTypeDistribution: React.FC<GraphsProps> = ({ hours = 24 }) =
   }, [hours]);
 
   if (loading) return <div className="animate-pulse h-64 bg-gray-200 rounded"></div>;
+
+  if (!data || data.length === 0) {
+    return (
+      <div className="bg-white p-6 rounded-lg shadow">
+        <h3 className="text-lg font-semibold mb-4">Anomaly Type Distribution</h3>
+        <div className="flex items-center justify-center h-64 text-gray-500">
+          <p>No anomaly data available. Start a simulation to see results.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white p-6 rounded-lg shadow">

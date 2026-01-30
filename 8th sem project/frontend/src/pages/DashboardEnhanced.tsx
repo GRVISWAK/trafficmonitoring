@@ -51,8 +51,8 @@ const DashboardEnhanced: React.FC = () => {
           high_priority: 0,
           medium_priority: 0,
           low_priority: 0,
-          avg_response_time: 0,
-          error_rate: 0,
+          avg_response_time: simStats.avg_response_time || 0,
+          error_rate: (simStats.error_rate || 0) * 100, // Convert to percentage
           system_health: simStats.active ? 'running' : 'idle'
         });
       }
@@ -101,9 +101,17 @@ const DashboardEnhanced: React.FC = () => {
     }
     
     try {
+      // Clear old simulation data first
+      await apiService.clearSimulationData();
+      toast.success('Cleared old simulation data');
+      
+      // Start new simulation
       await apiService.startSimulation(simulatedEndpoint, 60);
       setSimulationActive(true);
       toast.success(`Simulation started: ${simulatedEndpoint}`);
+      
+      // Force immediate refresh to show empty state
+      await loadData();
       
       // Start polling for updates
       const pollInterval = setInterval(async () => {
@@ -120,8 +128,8 @@ const DashboardEnhanced: React.FC = () => {
             high_priority: 0,
             medium_priority: 0,
             low_priority: 0,
-            avg_response_time: 0,
-            error_rate: 0,
+            avg_response_time: simStats.avg_response_time || 0,
+            error_rate: (simStats.error_rate || 0) * 100,
             system_health: simStats.active ? 'running' : 'idle'
           });
           
@@ -132,6 +140,8 @@ const DashboardEnhanced: React.FC = () => {
           if (!simStats.active) {
             clearInterval(pollInterval);
             toast.success('Simulation completed');
+            // Force refresh after completion
+            setTimeout(() => loadData(), 1000);
           }
         } catch (error) {
           console.error('Error polling simulation stats:', error);
@@ -144,14 +154,24 @@ const DashboardEnhanced: React.FC = () => {
   };
 
   const handleStopSimulation = async () => {
+    if (!simulationActive) {
+      toast.error('No simulation is running');
+      return;
+    }
+    
     try {
       await apiService.stopSimulation();
       setSimulationActive(false);
       toast.success('Simulation stopped');
-      loadData();
+      setTimeout(() => loadData(), 1000); // Refresh after delay
     } catch (error: any) {
       console.error('Error stopping simulation:', error);
-      toast.error(`Failed to stop: ${error.response?.data?.detail || error.message}`);
+      if (error.response?.status === 400) {
+        toast.error('No simulation is running');
+        setSimulationActive(false);
+      } else {
+        toast.error(`Failed to stop: ${error.response?.data?.detail || error.message}`);
+      }
     }
   };
 
@@ -163,18 +183,49 @@ const DashboardEnhanced: React.FC = () => {
       };
 
       if (method === 'POST') {
-        options.body = JSON.stringify({
-          username: 'testuser',
-          password: 'testpass',
-          amount: 100,
-          currency: 'USD'
-        });
+        let body = {};
+        if (endpoint === '/login' || endpoint === '/logout') {
+          body = { username: `testuser_${Date.now()}`, password: 'testpass' };
+        } else if (endpoint === '/payment') {
+          body = { 
+            user_id: `testuser_${Date.now()}`, 
+            amount: Math.floor(Math.random() * 1000) + 1, 
+            currency: 'USD',
+            card_number: '4111111111111111'
+          };
+        } else if (endpoint === '/signup') {
+          body = { 
+            username: `testuser_${Date.now()}`, 
+            email: `test_${Date.now()}@example.com`, 
+            password: 'testpass' 
+          };
+        }
+        options.body = JSON.stringify(body);
       }
 
       const response = await fetch(`http://localhost:8000${endpoint}`, options);
       
-      toast.success(`${method} ${endpoint} - Status: ${response.status}`);
-      loadData(); // Refresh stats
+      if (response.ok) {
+        toast.success(`${method} ${endpoint} - Status: ${response.status}`);
+      } else {
+        toast.error(`${method} ${endpoint} - Status: ${response.status}`);
+      }
+      
+      // Wait a bit for backend to process, then refresh
+      await new Promise(resolve => setTimeout(resolve, 300));
+      await loadData();
+      
+      // Trigger detection every 10 requests
+      if (stats && stats.total_api_calls % 10 === 9) {
+        try {
+          await apiService.triggerDetection();
+          console.log('Anomaly detection triggered automatically');
+          await new Promise(resolve => setTimeout(resolve, 300));
+          await loadData();
+        } catch (error) {
+          console.error('Error triggering detection:', error);
+        }
+      }
     } catch (error) {
       console.error(`Error testing ${endpoint}:`, error);
       toast.error(`Failed to test ${endpoint}`);
@@ -190,13 +241,13 @@ const DashboardEnhanced: React.FC = () => {
         current_window_count: simulationStats.current_window_count || 0,
         window_size: simulationStats.window_size || 10
       };
-    } else if (detectionMode === 'live' && stats?.live_stats) {
+    } else if (detectionMode === 'live' && stats) {
       return {
-        total_requests: stats.live_stats.total_requests || 0,
-        windows_processed: stats.live_stats.windows_processed || 0,
-        anomalies_detected: stats?.total_anomalies || 0,
-        current_window_count: stats.live_stats.current_window_count || 0,
-        window_size: stats.live_stats.window_size || 10
+        total_requests: stats.total_api_calls || stats.request_count || 0,
+        windows_processed: stats.windows_processed || 0,
+        anomalies_detected: stats.anomalies_detected || 0,
+        current_window_count: (stats.total_api_calls || 0) % 10,
+        window_size: 10
       };
     }
     return {
@@ -287,11 +338,11 @@ if (loading) {
                 disabled={simulationActive}
                 className="w-full px-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
               >
-                <option value="/sim/login">🔐 /sim/login</option>
-                <option value="/sim/search">🔍 /sim/search</option>
-                <option value="/sim/profile">👤 /sim/profile</option>
-                <option value="/sim/payment">💳 /sim/payment</option>
-                <option value="/sim/signup">📝 /sim/signup</option>
+                <option value="/sim/login">🔐 /sim/login (ERROR_SPIKE)</option>
+                <option value="/sim/search">🔍 /sim/search (TRAFFIC_BURST)</option>
+                <option value="/sim/profile">👤 /sim/profile (TIMEOUT)</option>
+                <option value="/sim/payment">💳 /sim/payment (LATENCY_SPIKE)</option>
+                <option value="/sim/signup">📝 /sim/signup (RESOURCE_EXHAUSTION)</option>
               </select>
             </div>
             
@@ -415,52 +466,76 @@ if (loading) {
 
       {/* Live Mode Testing Panel */}
       {detectionMode === 'live' && (
-        <div className="bg-dark-800 rounded-lg p-6 border border-dark-600">
-          <h2 className="text-xl font-bold text-white mb-4">
-            🧪 Test Whitelisted Endpoints
-          </h2>
-          <p className="text-sm text-dark-muted mb-4">
-            Click any button to send a test request. Only these 6 endpoints are tracked in LIVE mode.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            <button
-              onClick={() => testEndpoint('/login', 'POST')}
-              className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
-              🔐 Login
-            </button>
-            <button
-              onClick={() => testEndpoint('/signup', 'POST')}
-              className="px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
-            >
-              ✍️ Signup
-            </button>
-            <button
-              onClick={() => testEndpoint('/search?query=test', 'GET')}
-              className="px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
-            >
-              🔍 Search
-            </button>
-            <button
-              onClick={() => testEndpoint('/profile?user_id=test', 'GET')}
-              className="px-4 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg transition-colors"
-            >
-              👤 Profile
-            </button>
-            <button
-              onClick={() => testEndpoint('/payment', 'POST')}
-              className="px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
-            >
-              💳 Payment
-            </button>
-            <button
-              onClick={() => testEndpoint('/logout', 'POST')}
-              className="px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
-            >
-              🚪 Logout
-            </button>
+        <>
+          <div className="bg-dark-800 rounded-lg p-6 border border-dark-600">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">
+                  🧪 Test Whitelisted Endpoints
+                </h2>
+                <p className="text-sm text-dark-muted mt-1">
+                  Click any button to send a test request. Only these 6 endpoints are tracked in LIVE mode.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  try {
+                    const result = await apiService.triggerDetection();
+                    if (result.anomaly_detected) {
+                      toast.success(`Anomaly detected: ${result.anomaly_type}`);
+                    } else {
+                      toast.success('No anomalies detected in current window');
+                    }
+                    loadData();
+                  } catch (error) {
+                    toast.error('Failed to trigger detection');
+                  }
+                }}
+                className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
+              >
+                🔍 Trigger Detection
+              </button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <button
+                onClick={() => testEndpoint('/login', 'POST')}
+                className="px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
+              >
+                🔐 Login
+              </button>
+              <button
+                onClick={() => testEndpoint('/signup', 'POST')}
+                className="px-4 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors"
+              >
+                ✍️ Signup
+              </button>
+              <button
+                onClick={() => testEndpoint('/search?query=test', 'GET')}
+                className="px-4 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
+              >
+                🔍 Search
+              </button>
+              <button
+                onClick={() => testEndpoint('/profile?user_id=test', 'GET')}
+                className="px-4 py-3 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg transition-colors"
+              >
+                👤 Profile
+              </button>
+              <button
+                onClick={() => testEndpoint('/payment', 'POST')}
+                className="px-4 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
+              >
+                💳 Payment
+              </button>
+              <button
+                onClick={() => testEndpoint('/logout', 'POST')}
+                className="px-4 py-3 bg-gray-600 hover:bg-gray-700 text-white font-medium rounded-lg transition-colors"
+              >
+                🚪 Logout
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Per-Endpoint Breakdown (LIVE mode only) */}

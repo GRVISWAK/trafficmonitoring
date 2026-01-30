@@ -10,7 +10,7 @@ const Navigation: React.FC = () => {
   const location = useLocation();
 
   const navItems = [
-    { path: '/', label: 'Dashboard', icon: '📊' },
+    { path: '/', label: 'Dashboard', icon: '�' },
     { path: '/comprehensive', label: 'Analytics & Graphs', icon: '📈' },
     { path: '/analytics', label: 'Endpoint Analytics', icon: '🎯' },
     { path: '/admin', label: 'Admin Panel', icon: '⚙️' },

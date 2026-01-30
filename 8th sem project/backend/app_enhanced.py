@@ -23,6 +23,7 @@ from window_manager import live_window_manager, simulation_window_manager
 from traffic_simulator import traffic_simulator
 from simulation_manager_v2 import endpoint_history, endpoint_generator
 from auto_traffic_generator import auto_traffic_generator
+from mode_isolation import simulation_manager
 from websocket import manager
 
 # Initialize FastAPI app
@@ -246,44 +247,34 @@ async def start_simulation(
 ):
     """
     Start auto-detection simulation
-    
+
     Generates mixed traffic patterns for selected endpoint.
     ML models automatically detect anomaly types from window features.
-    
+
     Args:
         simulated_endpoint: Virtual endpoint (/sim/login, /sim/search, /sim/profile, /sim/payment, /sim/signup)
         duration_seconds: How long to run simulation
         requests_per_window: Requests per window (default 10)
-    
+
     Returns:
         Simulation status
     """
-    global simulation_active, simulation_task, simulation_stats
-    
     # Validate inputs
     if simulated_endpoint not in auto_traffic_generator.VIRTUAL_ENDPOINTS:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid endpoint. Must be one of: {auto_traffic_generator.VIRTUAL_ENDPOINTS}"
         )
-    
-    if simulation_active:
+
+    if simulation_manager.is_active():
         raise HTTPException(status_code=400, detail="Simulation already running")
-    
-    simulation_active = True
-    simulation_stats = {
-        'total_requests': 0,
-        'windows_processed': 0,
-        'anomalies_detected': 0,
-        'anomaly_episodes': {},  # Track unique anomaly episodes per endpoint
-        'start_time': time.time(),
-        'simulated_endpoint': simulated_endpoint,
-        'detected_anomaly_types': []  # ML-inferred types
-    }
-    
+
+    # Start simulation using isolated manager
+    simulation_manager.start(simulated_endpoint, duration_seconds, requests_per_window)
+
     # Reset simulation window
     simulation_window_manager.reset()
-    
+
     # Start simulation in background
     background_tasks.add_task(
         run_auto_detection_simulation,
@@ -291,7 +282,7 @@ async def start_simulation(
         duration_seconds=duration_seconds,
         requests_per_window=requests_per_window
     )
-    
+
     return {
         "status": "started",
         "simulated_endpoint": simulated_endpoint,
@@ -304,16 +295,15 @@ async def start_simulation(
 @app.post("/simulation/stop")
 async def stop_simulation():
     """Stop running simulation"""
-    global simulation_active
-    
-    if not simulation_active:
+    if not simulation_manager.is_active():
         raise HTTPException(status_code=400, detail="No simulation running")
-    
-    simulation_active = False
-    
+
+    # Stop simulation using isolated manager
+    result = simulation_manager.stop()
+
     return {
         "status": "stopped",
-        "stats": simulation_stats
+        "stats": result['final_stats']
     }
 
 
@@ -324,19 +314,22 @@ async def get_simulation_stats():
     accuracy_stats = endpoint_history.get_accuracy_stats()
     priority_dist = endpoint_history.get_priority_distribution()
     model_decisions = endpoint_history.get_model_decisions()
-    
+
+    # Get stats from isolated manager
+    sim_stats = simulation_manager.get_stats()
+
     return {
         'mode': 'SIMULATION',
-        'active': simulation_active,
-        'total_requests': simulation_stats['total_requests'],
+        'active': sim_stats['active'],
+        'total_requests': sim_stats['stats']['total_requests'],
         'windows_processed': window_info['windows_processed'],
-        'anomalies_detected': simulation_stats['anomalies_detected'],
+        'anomalies_detected': sim_stats['stats']['anomalies_detected'],
         'current_window_count': window_info['current_count'],
         'window_size': window_info['window_size'],
         'is_window_full': window_info['is_full'],
-        'simulated_endpoint': simulation_stats.get('simulated_endpoint', 'none'),
-        'anomaly_type': simulation_stats.get('anomaly_type', 'none'),
-        'start_time': simulation_stats.get('start_time'),
+        'simulated_endpoint': sim_stats['stats'].get('simulated_endpoint', 'none'),
+        'anomaly_type': sim_stats['stats'].get('anomaly_type', 'none'),
+        'start_time': sim_stats['stats'].get('start_time'),
         'accuracy': accuracy_stats,
         'priority_distribution': priority_dist,
         'model_decisions': model_decisions
@@ -700,10 +693,10 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
         "endpoint_counts": endpoint_counts,
         "live_stats": get_live_stats(),
         "simulation_stats": {
-            'active': simulation_active,
-            'total_requests': simulation_stats.get('total_requests', 0),
-            'windows_processed': simulation_stats.get('windows_processed', 0),
-            'anomalies_detected': simulation_stats.get('anomalies_detected', 0)
+            'active': simulation_manager.is_active(),
+            'total_requests': simulation_manager.get_stats()['stats']['total_requests'],
+            'windows_processed': simulation_manager.get_stats()['stats']['windows_processed'],
+            'anomalies_detected': simulation_manager.get_stats()['stats']['anomalies_detected']
         }
     }
 

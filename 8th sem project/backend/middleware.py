@@ -4,7 +4,7 @@ import time
 from database import SessionLocal, APILog
 import sys
 
-# Live mode stats - separate from simulation
+# Live mode stats - ONLY real endpoint hits
 live_mode_stats = {
     'total_requests': 0,
     'start_time': None,
@@ -12,8 +12,11 @@ live_mode_stats = {
     'anomalies_detected': 0,
     'total_response_time': 0.0,
     'error_count': 0,
-    'response_times': []  # Keep last 100 for rolling average
+    'response_times': []
 }
+
+# ONLY these endpoints count as live traffic
+LIVE_ENDPOINTS = {'/login', '/payment', '/search', '/profile', '/signup', '/logout'}
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     """Tracks ONLY LIVE MODE requests from real endpoint hits."""
@@ -49,11 +52,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         if hasattr(request.state, "user_id"):
             user_id = request.state.user_id
         
-        # Track LIVE requests - exclude monitoring/admin endpoints
-        excluded_paths = ["/ws", "/docs", "/openapi.json", "/favicon.ico", "/api/", "/simulation/"]
-        is_live_request = not any(endpoint.startswith(path) for path in excluded_paths)
+        # CRITICAL: Only count real business endpoints as live traffic
+        is_live_request = endpoint in LIVE_ENDPOINTS
         
-        if endpoint not in ["/ws", "/docs", "/openapi.json", "/favicon.ico"]:
+        # Only log and count LIVE endpoints
+        if is_live_request:
             db = SessionLocal()
             try:
                 log_entry = APILog(
@@ -64,13 +67,13 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     payload_size=payload_size,
                     ip_address=ip_address,
                     user_id=user_id,
-                    is_simulation=False  # This is a REAL live request
+                    is_simulation=False
                 )
                 db.add(log_entry)
                 db.commit()
                 
-                # Increment LIVE mode counter ONLY for real endpoint hits
-                if is_live_request:
+                # Increment LIVE mode counter
+                if True:
                     global live_mode_stats
                     live_mode_stats['total_requests'] += 1
                     if live_mode_stats['start_time'] is None:
@@ -91,32 +94,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                     error_rate = live_mode_stats['error_count'] / live_mode_stats['total_requests'] if live_mode_stats['total_requests'] > 0 else 0
                     
                     print(f"[LIVE] Request #{live_mode_stats['total_requests']}: {method} {endpoint} - {process_time:.2f}ms - Status {status_code}")
-                    
-                    # Broadcast live metrics update via WebSocket
-                    try:
-                        from websocket import manager
-                        import asyncio
-                        
-                        metrics_update = {
-                            "type": "live_metrics_update",
-                            "data": {
-                                "request_count": live_mode_stats['total_requests'],
-                                "windows_processed": live_mode_stats['windows_processed'],
-                                "avg_response_time": round(avg_response_time, 2),
-                                "error_rate": round(error_rate * 100, 2),
-                                "anomalies_detected": live_mode_stats['anomalies_detected'],
-                                "endpoint": endpoint,
-                                "method": method,
-                                "status_code": status_code
-                            }
-                        }
-                        
-                        # Create async task to broadcast (don't await to avoid blocking)
-                        loop = asyncio.new_event_loop()
-                        asyncio.set_event_loop(loop)
-                        loop.run_until_complete(manager.broadcast(metrics_update))
-                    except Exception as ws_error:
-                        print(f"[LIVE] WebSocket broadcast error: {ws_error}")
                     
             except Exception as e:
                 print(f"Error logging API call: {e}", file=sys.stderr)

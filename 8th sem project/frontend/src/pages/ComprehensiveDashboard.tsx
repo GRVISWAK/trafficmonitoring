@@ -139,7 +139,7 @@ const ComprehensiveDashboard: React.FC = () => {
 
       {/* Top Affected Endpoints */}
       <div className="mb-6">
-        <TopAffectedEndpoints hours={24} limit={10} />
+        <TopAffectedEndpoints hours={24} />
       </div>
 
       {/* Resolution Suggestions */}
